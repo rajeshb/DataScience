@@ -1,0 +1,7 @@
+name: Publish Document
+account: rpubs
+server: rpubs.com
+bundleId:
+        https://api.rpubs.com/api/v1/document/113703/e262bf34c07c4351aca8dad5bdb545b4
+url: http://rpubs.com/zippymind/113703
+when: 1443392495.50312

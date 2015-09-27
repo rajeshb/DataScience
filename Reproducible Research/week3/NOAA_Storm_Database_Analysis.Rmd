@@ -1,0 +1,170 @@
+---
+title: "NOAA Storm Database Analysis"
+author: "Rajesh Balasubramanian"
+date: "September 25, 2015"
+output: html_document
+---
+
+# Synopsis
+The purpose of the document is to perform data analysis on storm database from National Oceanic & Atmospheric Administration (NOAA), document the steps performed so that the analysis can be reprocible.
+
+The goal of the analysis is to answer 2 questions.
+
+- Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+- Across the United States, which types of events have the greatest economic consequences?
+
+# Data Processing
+
+Please note that [NOAA Storm Database](http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2) should available/to be downloaded to the current working directory.
+
+```{r echo=TRUE}
+# Required packages
+library(reshape2)
+library(ggplot2)
+
+# Option to limit the number of events, max number of events in a plot, to make it more readable
+maxNumberOfEventsInPlot <- 5
+```
+
+## Loading of NOAA Storm Database
+
+NOAA Storm database loaded through read.csv directly.
+
+```{r echo=TRUE}
+dataFile <- "repdata_data_StormData.csv.bz2"
+
+# If the dataFile doesn't exists in the current working directoy, download
+if (!file.exists(dataFile)) {
+        download.file("http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2", destfile = dataFile, method="curl")
+}
+
+# read.csv can handle CSV files with BZ2 compression!
+stormData <- read.csv(dataFile)
+```
+
+## Pre-processing
+
+Pre-processing of data for analysis - subsetting, calculated fields and transforms.
+
+```{r echo=TRUE}
+# subset of the following is what we are interested for this analysis 
+# saving it back to stormData to free up memory
+stormData <- subset(stormData, FATALITIES > 0 | INJURIES > 0 | PROPDMG > 0 | CROPDMG > 0)
+
+# subset only the columns that we are interested for our data analysis to answer those 2 questions
+stormData <- stormData[,c("EVTYPE", "FATALITIES", "INJURIES", "PROPDMG", "CROPDMG", "PROPDMGEXP", "CROPDMGEXP")]
+
+# Property and Crops Damage codes/multiplier
+damageMultiplier <- c('H' = 100, 'K' = 1000, 'M' = 1000000, 'B' = 1000000000 )
+
+# There are many entries for PROPDMGEXP, we'll use H/h = 100, K/k = 1000, M/m = 1000000, B/b = 1000000000. For the rest of the codes, we'll ignore.
+stormData$Propety_Damage <- damageMultiplier[toupper(stormData$PROPDMGEXP)] * stormData$PROPDMG
+
+# There are many entries for CROPDMGEXP, we'll use K/k = 1000, M/m = 1000000, B/b = 1000000000. For the rest of the codes, we'll ignore.
+stormData$Crop_Damage <- damageMultiplier[toupper(stormData$CROPDMGEXP)] * stormData$CROPDMG
+``` 
+
+```{r echo=FALSE}
+# There are 985 EVTYPE entries, need to be mapped to 48 actual/current entries (as much as possible)
+#eventType <- gsub("^astronomical low tide.*", "Astronomical Low Tide", eventType)
+#eventType <- gsub(".*avalanche.*|.*avalance.*", "Avalanche", eventType)
+#eventType <- gsub(".*blizzard.*", "Blizzard", eventType)
+#eventType <- gsub(".*coastal flood.*", "Coastal Flood", eventType)
+#eventType <- gsub("^cold.*|.*cold$", "Cold/Wind Chill", eventType)
+#eventType <- gsub("^debris flow.*", "Debris Flow", eventType)
+#eventType <- gsub("^dense fog.*|fog", "Dense Fog", eventType)
+#eventType <- gsub("^dense smoke.*", "Dense Smoke", eventType)
+#eventType <- gsub("^drought.*", "Drought", eventType)
+#eventType <- gsub("^dust devil.*", "Dust Devil", eventType)
+#eventType <- gsub("^dust storm.*", "Dust Storm", eventType)
+#eventType <- gsub("^excessive heat.*", "Excessive Heat", eventType)
+#eventType <- gsub("^extreme cold.*|extreme wind chill|extreme windchill", "Extreme Cold/Wind #Chill", eventType)
+#eventType <- gsub("^flash flood.*|flood flash|flood/flash.*", "Flash Flood", eventType)
+#eventType <- gsub("^flood.*", "Flood", eventType)
+#eventType <- gsub("^frost.*", "Frost/Freeze", eventType)
+#eventType <- gsub("^funnel cloud.*", "Funnel Cloud", eventType)
+#eventType <- gsub("^freez.*|fog and cold temperatures", "Freezing Fog", eventType)
+#eventType <- gsub("^hail.*", "Hail", eventType)
+#eventType <- gsub("^heat.*", "Heat", eventType)
+#eventType <- gsub("^heavy snow.*|^snow.*|.*heavy snow.*", "Heavy Snow", eventType)
+#eventType <- gsub("^heavy rain.*|.*rain$", "Heavy Rain", eventType)
+#eventType <- gsub(".*high surf.*", "High Surf", eventType)
+#eventType <- gsub("^high wind.*|^wind.*", "High Wind", eventType)
+#eventType <- gsub("^hurricane.*", "Hurricane (Typhoon)", eventType)
+#eventType <- gsub("^ic.*", "Ice Storm", eventType)
+#eventType <- gsub("^lake effect.*|^lake-effect.*", "Lake-Effect Snow", eventType)
+#eventType <- gsub("^lakeshore flood.*|^lake flood.*", "Lakeshore Flood", eventType)
+#eventType <- gsub("^lightning.*|lighting|ligntning", "Lightning", eventType)
+#eventType <- gsub("^marine hail.*", "Marine Hail", eventType)
+#eventType <- gsub("^marine high wind.*", "Marine High Wind", eventType)
+#eventType <- gsub("^marine strong wind.*", "Marine Strong Wind", eventType)
+#eventType <- gsub("^marine thunderstorm wind.*|marine tstm wind", "Marine Thunderstorm Wind", #eventType)
+#eventType <- gsub("^rip current.*", "Rip Current", eventType)
+#eventType <- gsub("^seiche.*", "Seiche", eventType)
+#eventType <- gsub("^sleet.*", "Sleet", eventType)
+#eventType <- gsub("^storm.*", "Storm Surge/Tide", eventType)
+#eventType <- gsub("^strong wind.*", "Strong Wind", eventType)
+#eventType <- gsub("^thunderstorm.*|thunderstrom wind|thundertorm winds|thunerstorm #winds|tunderstorm wind|thuderstorm winds|thundeerstorm winds|thunderestorm winds", "Thunderstorm Wind", eventType)
+#eventType <- gsub(".*tornado.*|torndao", "Tornado", tolower(eventType))
+#eventType <- gsub("^tropical storm.*|^tstm.*", "Tropical Storm", eventType)
+#eventType <- gsub("^tropical depression.*", "Tropical Depression", eventType)
+#eventType <- gsub("^tsunami.*", "Tsunami", eventType)
+#eventType <- gsub("^volcanic.*", "Volcanic Ash", eventType)
+#eventType <- gsub("^waterspout.*", "Waterspout", eventType)
+#eventType <- gsub("^wildfire.*|wild fires|wild/forest fire.*", "Wildfire", eventType)
+#eventType <- gsub("^winter storm.*", "Winter Storm", eventType)
+#eventType <- gsub("^winter weather.*", "Winter Weather", eventType)
+```
+
+## Preparing data for question #1
+
+```{r echo=TRUE}
+# Prepare data for question # 1 - finding events that were most harmful to population
+stormData.harmfulevents.melt <- melt(stormData, id.vars="EVTYPE", measure.vars=c("FATALITIES", "INJURIES"))
+
+# Get rid of records with 0 injuries or 0 fatalities
+stormData.harmfulevents.clean <- subset(stormData.harmfulevents.melt, value>0)
+
+# Get the total (injuries + fatalities)
+stormData.harmfulevents.total <- aggregate(stormData.harmfulevents.clean[c("value")], by=stormData.harmfulevents.clean[c("EVTYPE")], FUN=sum, na.rm=TRUE)
+
+# Pick the top records for plots
+stormData.harmfulevents.top <- subset(stormData.harmfulevents.clean, EVTYPE %in% stormData.harmfulevents.total[order(stormData.harmfulevents.total$value, decreasing=TRUE)[1:min(maxNumberOfEventsInPlot, length(stormData.harmfulevents.total$value))],]$EVTYPE)
+```
+
+## Preparing data for question #2
+
+```{r echo=TRUE}
+# Prepare data for Property & Crop damages
+stormData.melt <- melt(stormData, id.vars="EVTYPE", measure.vars=c("Propety_Damage", "Crop_Damage"))
+
+# group-by event and damage type
+stormData.summary <- aggregate(stormData.melt[c("value")], by=stormData.melt[c("EVTYPE", "variable")], FUN=sum, na.rm=TRUE)
+
+# Get rid of damages with 0 value
+stormData.summary.clean <- subset(stormData.summary, value>0)
+
+# Get total damage from both Property and Crop damages
+stormData.totaldamage <- aggregate(stormData.summary.clean[c("value")], by=stormData.summary.clean[c("EVTYPE")], FUN=sum, na.rm=TRUE)
+
+# Get events with most damages for our plots
+stormData.summary.top <- subset(stormData.summary.clean, EVTYPE %in% stormData.totaldamage[order(stormData.totaldamage$value, decreasing=TRUE)[1:min(maxNumberOfEventsInPlot, length(stormData.totaldamage$value))],]$EVTYPE)
+```
+
+# Results
+
+### Across the United States, which types of events (as indicated in the EVTYPE variable) are most harmful with respect to population health?
+
+From our analysis of the NOAA Storm database, the following events were most harmful with respect to population health across US.
+
+```{r echo=TRUE}
+ggplot(stormData.harmfulevents.top, aes(x = EVTYPE, y = value,fill=variable)) + geom_bar(stat='identity') + coord_flip() + labs(x="Events", y="Casualities", title="Events that were most harmful with respect to population acrosss US") + scale_fill_discrete(name="Type") 
+```
+
+### Across the United States, which types of events have the greatest economic consequences?
+
+From our analysis of the NOAA Storm database, the following events had the greatest economic consequences across US.
+
+```{r echo=TRUE}
+ggplot(stormData.summary.top, aes(x = EVTYPE, y = value,fill=variable)) + geom_bar(stat='identity') + coord_flip() + labs(x="Events", y="Damage Cost", title="Events with greatest economic consequences acrosss US") + scale_fill_discrete(name="Damages") 
+```
