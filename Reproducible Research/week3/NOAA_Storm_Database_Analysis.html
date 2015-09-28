@@ -94,15 +94,15 @@ maxNumberOfEventsInPlot &lt;- 5</code></pre>
 # If the dataFile doesn't exists in the current working directoy, download
 if (!file.exists(dataFile)) {
         download.file(&quot;http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2&quot;, destfile = dataFile, method=&quot;curl&quot;)
-}</code></pre>
+}
+
+# read.csv can handle CSV files with BZ2 compression!
+stormData &lt;- read.csv(dataFile)</code></pre>
 </div>
 <div id="pre-processing" class="section level2">
 <h2>Pre-processing</h2>
 <p>Pre-processing of data for analysis - subsetting, calculated fields and transforms.</p>
-<pre class="r"><code># read.csv can handle CSV files with BZ2 compression!
-stormData &lt;- read.csv(dataFile)
-
-# subset of the following is what we are interested for this analysis 
+<pre class="r"><code># subset of the following is what we are interested for this analysis 
 # saving it back to stormData to free up memory
 stormData &lt;- subset(stormData, FATALITIES &gt; 0 | INJURIES &gt; 0 | PROPDMG &gt; 0 | CROPDMG &gt; 0)
 
@@ -136,9 +136,17 @@ stormData.harmfulevents.top &lt;- subset(stormData.harmfulevents.clean, EVTYPE %
 <h2>Preparing data for question #2</h2>
 <pre class="r"><code># Prepare data for Property &amp; Crop damages
 stormData.melt &lt;- melt(stormData, id.vars=&quot;EVTYPE&quot;, measure.vars=c(&quot;Propety_Damage&quot;, &quot;Crop_Damage&quot;))
+
+# group-by event and damage type
 stormData.summary &lt;- aggregate(stormData.melt[c(&quot;value&quot;)], by=stormData.melt[c(&quot;EVTYPE&quot;, &quot;variable&quot;)], FUN=sum, na.rm=TRUE)
+
+# Get rid of damages with 0 value
 stormData.summary.clean &lt;- subset(stormData.summary, value&gt;0)
+
+# Get total damage from both Property and Crop damages
 stormData.totaldamage &lt;- aggregate(stormData.summary.clean[c(&quot;value&quot;)], by=stormData.summary.clean[c(&quot;EVTYPE&quot;)], FUN=sum, na.rm=TRUE)
+
+# Get events with most damages for our plots
 stormData.summary.top &lt;- subset(stormData.summary.clean, EVTYPE %in% stormData.totaldamage[order(stormData.totaldamage$value, decreasing=TRUE)[1:min(maxNumberOfEventsInPlot, length(stormData.totaldamage$value))],]$EVTYPE)</code></pre>
 </div>
 </div>
