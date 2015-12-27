@@ -1,0 +1,205 @@
+---
+title: "Practical Machine Learning - Course Project"
+author: "Rajesh Balasubramanian"
+output: html_document
+---
+
+>**Background**
+
+>Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset). 
+
+
+>**Data**
+
+>The training data for this project are available here: 
+
+>https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+>The test data are available here: 
+
+>https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+>The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. If you use the document you create for this class for any purpose please cite them as they have been very generous in allowing their data to be used for this kind of assignment. 
+
+>**What you should submit**
+
+>The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases. 
+
+>1. Your submission should consist of a link to a Github repo with your R markdown and compiled HTML file describing your analysis. Please constrain the text of the writeup to < 2000 words and the number of figures to be less than 5. It will make it easier for the graders if you submit a repo with a gh-pages branch so the HTML page can be viewed online (and you always want to make it easy on graders :-).
+2. You should also apply your machine learning algorithm to the 20 test cases available in the test data above. Please submit your predictions in appropriate format to the programming assignment for automated grading. See the programming assignment for additional details. 
+
+>**Reproducibility**
+
+>Due to security concerns with the exchange of R code, your code will not be run during the evaluation by your classmates. Please be sure that if they download the repo, they will be able to view the compiled HTML version of your analysis. 
+
+# Data Processing
+
+### Loading Libraries
+```{r echo=TRUE}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(corrplot)
+#library(rattle)
+```
+
+### Downloading Data
+```{r echo=TRUE}
+trainUrl <-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testUrl <- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainFile <- "./data/pml-training.csv"
+testFile  <- "./data/pml-testing.csv"
+
+if (!file.exists("./data")) {
+  dir.create("./data")
+}
+
+if (!file.exists(trainFile)) {
+  download.file(trainUrl, destfile=trainFile, method="curl")
+}
+
+if (!file.exists(testFile)) {
+  download.file(testUrl, destfile=testFile, method="curl")
+}
+```
+
+### Reading Data
+```{r echo=TRUE}
+trainRaw <- read.csv("./data/pml-training.csv",na.strings=c("NA",""), header=TRUE)
+testRaw <- read.csv("./data/pml-testing.csv",na.strings=c("NA",""), header=TRUE)
+dim(trainRaw);dim(testRaw)
+```
+
+### Cleaning Data
+```{r echo=TRUE}
+# Remove columns with missing values
+trainRaw <- trainRaw[, colSums(is.na(trainRaw)) == 0] 
+testRaw <- testRaw[, colSums(is.na(testRaw)) == 0] 
+dim(trainRaw);dim(testRaw)
+
+# Remove columns that are not useful for our prediction/calculations
+trainRemove <- grepl("^X|timestamp|window|user_name", names(trainRaw))
+trainCleaned <- trainRaw[, !trainRemove]
+testRemove <- grepl("^X|timestamp|window|user_name", names(testRaw))
+testCleaned <- testRaw[, !testRemove]
+dim(trainCleaned);dim(testCleaned)
+```
+
+### Slicing Data
+```{r echo=TRUE}
+# We slice the training data set into 60% for testing and 40% for cross validation
+set.seed(4321)
+inTrain <- createDataPartition(trainCleaned$classe, p=0.60, list=F)
+trainData <- trainCleaned[inTrain, ]
+testData <- trainCleaned[-inTrain, ]
+dim(trainData);dim(testData)
+```
+
+# Data Modeling
+
+### Classification Tree
+```{r echo=TRUE}
+# Train the model
+modCT <- train(classe ~ ., data = trainData, method="rpart")
+print(modCT, digits=3)
+
+# Turning off the fancy report since rattle package was crashing on my mac.
+#fancyRpartPlot(modCT$finalModel)
+
+# Run prediction test against validation data (testData)
+predictCT <- predict(modCT, newdata=testData)
+matrixCT <- confusionMatrix(predictCT, testData$classe)
+print(matrixCT, digits=3)
+```
+
+Classification Tree accuracy (`r matrixCT$overall["Accuracy"]`) turns out to be poor.
+
+### Preprocessing
+
+```{r echo=TRUE}
+# Train the model
+modPP <- train(classe ~ ., preProcess=c("center", "scale"), data = trainData, method="rpart")
+print(modPP, digits=3)
+
+# Run prediction test against validation data (testData)
+predictPP <- predict(modPP, newdata=testData)
+matrixPP <- confusionMatrix(predictPP, testData$classe)
+print(matrixPP, digits=3)
+```
+
+Preprocessing accuracy (`r matrixPP$overall["Accuracy"]`) hasn't improved from Classification Tree accuracy.
+
+### Cross Validation
+
+```{r echo=TRUE}
+# Train the model
+modCV <- train(classe ~ ., trControl=trainControl(method = "cv", number = 4), data = trainData, method="rpart")
+print(modCV, digits=3)
+
+# Run prediction test against validation data (testData)
+predictCV <- predict(modCV, newdata=testData)
+matrixCV <- confusionMatrix(predictCV, testData$classe)
+print(matrixCV, digits=3)
+```
+
+Cross Validation accuracy (`r matrixCV$overall["Accuracy"]`) hasn't improved from Classification Tree or Preprocessing accuracy.
+
+### Preprocessing and Cross Validation
+
+```{r echo=TRUE}
+# Train the model
+modPPCV <- train(classe ~ ., preProcess=c("center", "scale"), trControl=trainControl(method = "cv", number = 4), data = trainData, method="rpart")
+print(modPPCV, digits=3)
+
+# Run prediction test against validation data (testData)
+predictPPCV <- predict(modPPCV, newdata=testData)
+matrixPPCV <- confusionMatrix(predictPPCV, testData$classe)
+print(matrixPPCV, digits=3)
+```
+
+Accuracy of Preprocessing and Cross Validation together (`r matrixPPCV$overall["Accuracy"]`) hasn't improved much either.
+
+### Random Forest
+```{r echo=TRUE}
+# Train
+modRF <- train(classe ~ ., data=trainData, method="rf", trControl=trainControl(method="cv", 5), ntree=250)
+print(modRF, digits=3)
+
+# Predict against validation data
+predictRF <- predict(modRF, testData)
+matrixRF <- confusionMatrix(predictRF, testData$classe)
+print(matrixRF, digits=3)
+
+# Resample
+matrixPRSRF <- postResample(predictRF, testData$classe)
+print(matrixPRSRF, digits=3)
+
+# Out of Sample Error
+sampleError <- 1 - as.numeric(matrixRF$overall["Accuracy"])
+```
+
+Random Forest is highly accurate (`r matrixRF$overall["Accuracy"]`) and out of sample error is `r sampleError`. We'll proceed with prediction against actual test data.
+
+# PREDICTION RESULT
+```{r echo=TRUE}
+# Run prediction against test data set
+results <- predict(modRF, testCleaned)
+results
+```
+
+### Submission to Coursera
+
+Write submission files to `output` folder.
+
+```{r}
+pml_write_files = function(x) {
+        n = length(x)
+        path <- "output"
+        for(i in 1:n) {
+                filename = paste0("problem_id_",i,".txt")
+                write.table(x[i],file=file.path(path, filename),quote=FALSE,row.names=FALSE,col.names=FALSE)
+        }
+}
+pml_write_files(results)
+```
