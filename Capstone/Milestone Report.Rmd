@@ -1,0 +1,179 @@
+---
+title: "Capstone Project - Milestone Report"
+author: "Rajesh Balasubramanian"
+date: "March 20, 2016"
+output: html_document
+---
+
+# Exploratory Data Analysis
+
+As part of the exploratory data analysis, we'll setup and analyze data. At the end of the data analysis, we'll have better understanding of the data that will help with our approach to building prediction algorithm/solution for solving our text prediction problem.
+
+## Setup
+
+As part of the setup, we'll setup the environment and load the data for our exploratory data analysis. We'll be performing the following steps:
+
++ Load required libraries
++ Setup clusters for parallel processing
++ Download data, if necessary
++ Load and examine data
++ Provide data summary
+
+### Load required libraries
+
+```{r results='hide'}
+# Preload R librabires
+library(doParallel)
+library(stringi)
+library(SnowballC)
+library(tm)
+library(slam)
+library(ggplot2)
+library(RColorBrewer)
+library(wordcloud)
+
+# Setup parallel clusters to accelarate processing
+jobcluster <- makeCluster(detectCores())
+invisible(clusterEvalQ(jobcluster, library(tm)))
+invisible(clusterEvalQ(jobcluster, library(slam)))
+invisible(clusterEvalQ(jobcluster, library(stringi)))
+invisible(clusterEvalQ(jobcluster, library(wordcloud)))
+```
+
+### Download data, if necessary
+
+```{r}
+# Check for zip file and download if necessary
+if (!file.exists("data/Coursera-SwiftKey.zip")) {
+    download.file("https://d396qusza40orc.cloudfront.net/dsscapstone/dataset/Coursera-SwiftKey.zip", 
+        destfile = "data/Coursera-SwiftKey.zip")
+}
+
+# Check for data file and unzip if necessary
+if (!file.exists("data/final/en_US/en_US.blogs.txt")) {
+    unzip("data/Coursera-SwiftKey.zip", exdir = "data")
+}
+```
+
+### Load data
+
+```{r, echo=TRUE, cache=TRUE}
+
+blogsFile <- "data/final/en_US/en_US.blogs.txt"
+newsFile <- "data/final/en_US/en_US.news.txt"
+twitterFile <- "data/final/en_US/en_US.twitter.txt"
+
+# File Size
+blogsFileSize <- round(file.info(blogsFile)$size / 1024^2, digits=2)
+newsFileSize <- round(file.info(newsFile)$size / 1024^2, digits=2)
+twitterFileSize <- round(file.info(twitterFile)$size / 1024^2, digits=2)
+
+# Data
+blogsData <- readLines(blogsFile, encoding = "UTF-8", skipNul=TRUE)
+newsData <- readLines(newsFile, encoding = "UTF-8", skipNul=TRUE)
+twitterData <- readLines(twitterFile, encoding = "UTF-8", skipNul=TRUE)
+
+# Words
+blogsWords <- sum(stri_count_words(blogsData))
+newsWords <- sum(stri_count_words(newsData))
+twitterWords <- sum(stri_count_words(twitterData))
+
+dataSummary <- data.frame(name = c("blogs","news","twitter"),
+                          fileSizeMB = c(blogsFileSize, newsFileSize, twitterFileSize),
+                          numLines = c(length(blogsData),length(newsData),length(twitterData)),
+                          numWords = c(blogsWords, newsWords, twitterWords))
+
+```
+
+### Data summary
+
+```{r, echo=FALSE}
+dataSummary
+```
+
+## Data Processing
+
+Since our data is large, as part of the data processing step, we'll select samples from our full data set for our data analysis. We'll be performing the following steps:
+
++ Select sample data
++ Provide sample data summary
++ Sample data cleanup
+
+### Select sample data
+
+```{r, cache=TRUE}
+set.seed(1357)
+sampleSize <- 10000
+
+blogsSample <- blogsData[sample(1:length(blogsData), sampleSize)]
+newsSample <- newsData[sample(1:length(newsData), sampleSize)]
+twitterSample <- twitterData[sample(1:length(twitterData), sampleSize)]
+
+sampleData <- c(blogsSample, newsSample, twitterSample)
+
+sampleWords <- sum(stri_count_words(sampleData))
+
+sampleDataSummary <- data.frame(name = c("sampleData"),
+                          numLines = c(length(sampleData)),
+                          numWords = c(sampleWords))
+```
+
+### Sample data summary
+
+```{r, echo=FALSE}
+sampleDataSummary
+
+# Release full data from memory
+rm(blogsData)
+rm(newsData)
+rm(twitterData)
+```
+
+### Sample data cleanup
+
+```{r, echo=TRUE}
+# Text analysis/mining
+sampleDataCorpus <- Corpus(VectorSource(sampleData))
+
+# Data cleanup
+sampleDataCorpus <- tm_map(sampleDataCorpus, content_transformer(function(x) stri_replace_all_regex(x,"[^\\p{L}\\s[']]+","")))
+sampleDataCorpus <- tm_map(sampleDataCorpus, content_transformer(tolower))
+sampleDataCorpus <- tm_map(sampleDataCorpus, content_transformer(PlainTextDocument))
+sampleDataCorpus <- tm_map(sampleDataCorpus, content_transformer(removePunctuation))
+sampleDataCorpus <- tm_map(sampleDataCorpus, removeWords, stopwords("english"))
+sampleDataCorpus <- tm_map(sampleDataCorpus, stemDocument, lazy=TRUE)
+sampleDataCorpus <- tm_map(sampleDataCorpus, content_transformer(removeNumbers))
+sampleDataCorpus <- tm_map(sampleDataCorpus, content_transformer(stripWhitespace))
+```
+
+## Data Analysis
+
+In this step, we'll analyze the cleaned up sample data. One of the ways to understand data is to visualize using frequency of the words used, using 'wordcloud' diagram.
+
+```{r, echo=TRUE}
+# Term Document Matrix for Word Cloud
+sampleDataTDM <- TermDocumentMatrix(sampleDataCorpus)
+wcloud <- as.matrix(sampleDataTDM)
+v <- sort(rowSums(wcloud),decreasing=TRUE)
+d <- data.frame(word = names(v),freq=v)
+```
+
+### Visualize Frequent Words (WordCloud)
+
+```{r, echo=FALSE}
+wordcloud(d$word, d$freq, scale=c(5,.3), min.freq=2, max.words=80, random.order=FALSE, colors=brewer.pal(8, "Dark2"))
+```
+
+# Interesting Findings
+
++ Data loading takes quite a bit of time, parallel processing setup helps
++ More the data for samples, slower the processing and possibility of memory errors. Lesser the samples, lesser the accuracy of the prediction will be. We need to find a balance between being quick and being accurate.
+
+# Next Steps
+
+Now that we have performed some exploratory analysis, we are ready to build the predictive models and the data product. Plans for the next steps include
+
++ N-grams to generate tokens
++ Association between tokens and their frequencies
++ Building predictive models using the tokens
++ Develop a shiny app to make word recommendation based on user inputs
